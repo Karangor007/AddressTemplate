@@ -125,21 +125,9 @@ namespace Template.API.Services
         {
             try
             {
-                _logger.LogInformation("Creating ZIP archive for {Count} rendered HTML items", render.Items.Count);
 
                 using var ms = new MemoryStream();
-                using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
-                {
-                    foreach (var item in render.Items)
-                    {
-                        var entry = archive.CreateEntry(item.FileName, CompressionLevel.Optimal);
-                        using var es = entry.Open();
-                        var bytes = Encoding.UTF8.GetBytes(item.Html);
-                        es.Write(bytes, 0, bytes.Length);
-
-                        _logger.LogDebug("Added {FileName} to ZIP archive", item.FileName);
-                    }
-                }
+                
 
                 _logger.LogInformation("ZIP archive created successfully (Size={Size} bytes)", ms.Length);
                 return ms.ToArray();

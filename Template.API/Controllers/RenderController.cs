@@ -21,7 +21,6 @@ namespace Template.API.Controllers
         }
 
         [HttpPost]        
-        [Consumes("multipart/form-data")]
         [Route("RenderHtml")]
         public async Task<ActionResult<RenderResult>> RenderHtml([FromForm] RenderHtmlRequest request)
         {
@@ -44,7 +43,6 @@ namespace Template.API.Controllers
                 using var stream = request.Csv.OpenReadStream();
                 var result = await _renderer.RenderFromCsvAsync(stream, renderReq, HttpContext.RequestAborted);
 
-                _logger.LogInformation("RenderHtml completed with {Count} items", result.Items.Count);
                 return Ok(result);
             }
             catch (Exception ex)
