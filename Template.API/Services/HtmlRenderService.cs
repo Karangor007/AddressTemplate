@@ -37,14 +37,14 @@ namespace Template.API.Services
 
             try
             {
-                // 🔹 Load template from content root
+                // Load template
                 var templatePath = Path.Combine(_env.ContentRootPath, "Templates", templateName);
                 if (!File.Exists(templatePath))
                     throw new FileNotFoundException($"Template not found at {templatePath}");
 
                 var template = await File.ReadAllTextAsync(templatePath, Encoding.UTF8, ct);
 
-                // 🔹 Read CSV
+                // Read CSV
                 using var reader = new StreamReader(csvStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
                 var cfg = new CsvConfiguration(CultureInfo.InvariantCulture)
                 {
@@ -52,18 +52,14 @@ namespace Template.API.Services
                     IgnoreBlankLines = true,
                     TrimOptions = TrimOptions.Trim,
                     PrepareHeaderForMatch = args => args.Header?.Trim() ?? string.Empty,
-                    BadDataFound = null // Ignore malformed rows
+                    BadDataFound = null
                 };
-
                 using var csv = new CsvReader(reader, cfg);
                 var rows = new List<IDictionary<string, string?>>();
-
                 if (await csv.ReadAsync())
                 {
                     csv.ReadHeader();
                     var headers = csv.HeaderRecord?.Select(h => h.Trim()).ToList() ?? new List<string>();
-                    _logger.LogInformation("CSV Headers: {Headers}", string.Join(",", headers));
-
                     while (await csv.ReadAsync())
                     {
                         var dict = headers.ToDictionary(
@@ -75,40 +71,39 @@ namespace Template.API.Services
                     }
                 }
 
-                _logger.LogInformation("Total rows parsed from CSV: {RowCount}", rows.Count);
-
-                // 🔹 Build combined HTML
+                // Build combined HTML
                 var combinedHtml = new StringBuilder();
                 combinedHtml.AppendLine("<!DOCTYPE html><html><head><meta charset='utf-8'/><title>Letters</title></head><body>");
-
-                int rowIndex = 1;
                 foreach (var row in rows)
                 {
                     var values = BuildValueBag(row, request.DateFormat);
-
                     var html = Placeholder.Replace(template, m =>
                     {
                         var key = m.Groups[1].Value;
                         if (key.Equals("CardNunber", StringComparison.OrdinalIgnoreCase))
                             key = "CardNumber";
-
                         return values.TryGetValue(key, out var val) ? val : string.Empty;
                     });
-
                     combinedHtml.AppendLine("<div style='page-break-after: always;'>");
                     combinedHtml.AppendLine(html);
                     combinedHtml.AppendLine("</div>");
-
-                    _logger.LogDebug("Rendered letter {Index} for {FirstName} {LastName}", rowIndex, values.GetValueOrDefault("FirstName"), values.GetValueOrDefault("LastName"));
-                    rowIndex++;
                 }
-
                 combinedHtml.AppendLine("</body></html>");
 
-                var result = new RenderResult { TemplateName = templateName };
-                result.Items.Add(new RenderedItem("letters.html", combinedHtml.ToString()));
+                // 🔹 Save HTML to unique file
+                var outputFolder = Path.Combine(_env.ContentRootPath, "RenderedLetters");
+                Directory.CreateDirectory(outputFolder); // ensure folder exists
+                var uniqueFileName = $"Address_Template_{Guid.NewGuid()}.html";
+                var outputPath = Path.Combine(outputFolder, uniqueFileName);
+                await File.WriteAllTextAsync(outputPath, combinedHtml.ToString(), Encoding.UTF8, ct);
 
-                _logger.LogInformation("Finished rendering {RowCount} letters into a single HTML file", rows.Count);
+                _logger.LogInformation("Rendered HTML saved as {FileName}", uniqueFileName);
+
+                var result = new RenderResult
+                {
+                    TemplateName = templateName,
+                    UniqueFileName = uniqueFileName // return unique file name in API
+                };
 
                 return result;
             }

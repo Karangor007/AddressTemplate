@@ -11,11 +11,13 @@ namespace Template.API.Controllers
     {
         private readonly IHtmlRenderService _renderer;
         private readonly ILogger<RenderController> _logger;
+        private readonly IWebHostEnvironment _env;
 
-        public RenderController(IHtmlRenderService renderer, ILogger<RenderController> logger)
+        public RenderController(IHtmlRenderService renderer, ILogger<RenderController> logger, IWebHostEnvironment env)
         {
             _renderer = renderer;
             _logger = logger;
+            _env = env;
         }
 
         [HttpPost]        
@@ -50,6 +52,34 @@ namespace Template.API.Controllers
                 _logger.LogError(ex, "Error in RenderHtml.");
                 throw;
             }
+        }
+
+        [HttpGet("download/{fileName}")]
+        public IActionResult DownloadLetter(string fileName)
+        {
+            try
+            {
+                _logger.LogInformation("DownloadLetter with  string = {fileName}",
+                fileName);
+
+                if (string.IsNullOrWhiteSpace(fileName))
+                    return BadRequest("Invalid file name.");
+
+                var filePath = Path.Combine(_env.ContentRootPath, "RenderedLetters", fileName);
+
+                if (!System.IO.File.Exists(filePath))
+                    return NotFound("File not found.");
+
+                var fileBytes = System.IO.File.ReadAllBytes(filePath);
+                return File(fileBytes, "text/html", fileName);
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogError(ex, "Error in DownloadLetter.");
+                throw;
+            }
+          
         }
     }
 }
